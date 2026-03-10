@@ -18,6 +18,7 @@ from src.schemas.auth import (
     UserResponse,
 )
 from src.utils.security import clear_auth_cookies, set_auth_cookies
+from src.schemas.auth import ProvisionExternalRequest
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -99,6 +100,22 @@ async def get_all_users(service:Annotated[AuthService,Depends(_get_service)]):
     users=await service.get_all_users()
     return users
     
+@router.get(
+    "/users/by-email",
+    response_model=UserResponse,
+    tags=["Internal"],
+    summary="Get user by email — internal use by Ticketing Service",
+)
+async def get_user_by_email(
+    email: str,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> UserResponse:
+    repo = UserRepository(session)
+    user = await repo.get_by_email(email.lower().strip())
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User with email '{email}' not found")
+    return UserResponse.model_validate(user)
+
 
 @router.get(
     "/users/{user_id}",
@@ -141,3 +158,24 @@ async def get_agents_by_lead(
     Internal endpoint consumed by Ticketing Service to get all agents associated with a specific lead.
     """
     return await service.get_agents_by_lead(lead_id)
+
+
+
+@router.post(
+    "/provision-external",
+    response_model=UserResponse,
+    tags=["Internal"],
+    summary="Provision a provisional customer account — internal use by Ticketing Service",
+    status_code=201,
+)
+async def provision_external_user(
+    data: ProvisionExternalRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> UserResponse:
+    repo = UserRepository(session)
+
+    existing = await repo.get_by_email(data.email.lower().strip())
+    if existing:
+        return UserResponse.model_validate(existing)
+
+    return None

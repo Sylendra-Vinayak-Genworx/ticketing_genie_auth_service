@@ -1,16 +1,4 @@
-"""
-TeamService
-~~~~~~~~~~~
-Teams are defined by a lead + all users where User.lead_id == lead.id.
-No join table — membership is encoded directly on the User row.
 
-Lead derivation
----------------
-The client does NOT send lead_id. The backend finds whichever member
-has role=team_lead in the members list, creates them first, and uses
-their new user.id as the team's lead_id. All other members get
-user.lead_id = that lead's id.
-"""
 from __future__ import annotations
 
 import logging

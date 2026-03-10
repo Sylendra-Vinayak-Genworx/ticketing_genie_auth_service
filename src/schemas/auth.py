@@ -80,7 +80,8 @@ class UserResponse(BaseModel):
     is_verified: bool
     created_at: datetime
     lead_id:uuid.UUID | None
-
+    team_id:uuid.UUID|None
+    
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("role", mode="before")
@@ -103,3 +104,9 @@ class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class ProvisionExternalRequest(BaseModel):
+    email: EmailStr
+    role: str = "user"
+    full_name: str = ""
