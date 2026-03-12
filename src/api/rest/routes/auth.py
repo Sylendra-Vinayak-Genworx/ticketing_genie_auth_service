@@ -16,6 +16,7 @@ from src.schemas.auth import (
     SignupResponse,
     TokenResponse,
     UserResponse,
+    UserUpdateRequest,
 )
 from src.utils.security import clear_auth_cookies, set_auth_cookies
 from src.schemas.auth import ProvisionExternalRequest
@@ -179,3 +180,41 @@ async def provision_external_user(
         return UserResponse.model_validate(existing)
 
     return None
+
+
+@router.patch(
+    "/users/{user_id}",
+    response_model=UserResponse,
+    tags=["Internal"],
+    summary="Update user profile / tier — internal use by Ticketing Service",
+)
+async def update_user(
+    user_id: str,
+    data: UserUpdateRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> UserResponse:
+    """
+    Internal endpoint to update user fields like customer_tier_id, full_name, etc.
+    """
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid UUID: '{user_id}'")
+
+    repo = UserRepository(session)
+    user = await repo.get_by_id(uid)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    if data.full_name is not None:
+        user.full_name = data.full_name
+    if data.is_active is not None:
+        user.is_active = data.is_active
+    if data.customer_tier_id is not None:
+        user.customer_tierid = data.customer_tier_id
+    if data.preferred_mode_of_contact is not None:
+        user.preferred_mode_of_contact = data.preferred_mode_of_contact
+
+    await repo.save(user)
+    await session.commit()
+    return UserResponse.model_validate(user)
