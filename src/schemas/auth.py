@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from src.constants.enum import UserRole
+from src.constants.enum import ContactMode, UserRole
 
 
 class SignupRequest(BaseModel):
@@ -79,9 +79,11 @@ class UserResponse(BaseModel):
     is_active: bool
     is_verified: bool
     created_at: datetime
-    lead_id:uuid.UUID | None
-    team_id:uuid.UUID|None
-    
+    lead_id: uuid.UUID | None = None
+    team_id: uuid.UUID | None = None          # optional — no column on User, only a relationship
+    preferred_mode_of_contact: str = "email"  # ContactMode.EMAIL default
+    customer_tier_id: int | None = Field(default=None, validation_alias="customer_tierid")
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("role", mode="before")
@@ -92,6 +94,20 @@ class UserResponse(BaseModel):
             name = v.name
             return name.value if hasattr(name, "value") else str(name)
         return str(v)
+
+    @field_validator("preferred_mode_of_contact", mode="before")
+    @classmethod
+    def extract_contact_mode(cls, v):
+        """Handle ContactMode enum → plain string."""
+        if v is None:
+            return "email"
+        return v.value if hasattr(v, "value") else str(v)
+
+    @field_validator("customer_tier_id", mode="before")
+    @classmethod
+    def map_customer_tier(cls, v):
+        """ORM column is customer_tierid — tolerate None."""
+        return v
 
 
 class SignupResponse(BaseModel):
@@ -110,3 +126,12 @@ class ProvisionExternalRequest(BaseModel):
     email: EmailStr
     role: str = "user"
     full_name: str = ""
+
+
+class UserUpdateRequest(BaseModel):
+    """Payload for updating user profile / tier."""
+
+    full_name: str | None = None
+    is_active: bool | None = None
+    customer_tier_id: int | None = None
+    preferred_mode_of_contact: ContactMode | None = None
