@@ -60,6 +60,7 @@ class AuthService:
             email=data.email.lower().strip(),
             hashed_password=hash_password(data.password),
             role_id=role_record.id,
+            full_name=data.full_name,
         )
         saved = await self._user_repo.save(user)
         logger.info("signup_success", email=data.email, user_id=str(saved.id))

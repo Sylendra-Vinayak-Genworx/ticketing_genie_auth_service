@@ -19,10 +19,16 @@ from src.schemas.auth import (
     UserUpdateRequest,
 )
 from src.utils.security import clear_auth_cookies, set_auth_cookies
-from src.schemas.auth import ProvisionExternalRequest
+from src.schemas.auth import ProvisionExternalRequest, UserCreateRequest, UserCreateResponse
+from src.core.services.team_service import generate_temp_password   
+from src.core.services.email_service import email_service
+from src.config.settings import get_settings
+from src.api.rest.dependencies.auth import role_required
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+_admin = Depends(role_required("admin"))
+
 
 
 def _get_service(session: Annotated[AsyncSession, Depends(get_db)]) -> AuthService:
@@ -101,6 +107,44 @@ async def get_all_users(service:Annotated[AuthService,Depends(_get_service)]):
     users=await service.get_all_users()
     return users
     
+@router.post(
+    "/admin/users",
+    response_model=UserCreateResponse,
+    status_code=201,
+    summary="Create a new user (Admin only)",
+    dependencies=[_admin],
+)
+async def create_user_admin(
+    data: UserCreateRequest,
+    service: Annotated[AuthService, Depends(_get_service)],
+) -> UserCreateResponse:
+    # Generate temp password
+    temp_password = generate_temp_password()
+    
+    # Create the user using Auth Service (signup handles role creation and hashing)
+    signup_data = SignupRequest(
+        email=data.email,
+        full_name=data.full_name,
+        password=temp_password,
+        role=data.role.value,
+    )
+    user_response = await service.signup(signup_data)
+    
+    # Send invite email
+    try:
+        email_service.send_user_invite(
+            to=data.email,
+            full_name=data.full_name,
+            role=data.role.value,
+            temporary_password=temp_password,
+            login_url=get_settings().FRONTEND_URL + "/login",
+        )
+    except Exception:
+        logger.exception("user_invite_email_failed")
+
+    return UserCreateResponse(user=user_response, temporary_password=temp_password)
+
+
 @router.get(
     "/users/by-email",
     response_model=UserResponse,

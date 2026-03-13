@@ -18,9 +18,7 @@ from src.data.repositories.team_repository import TeamRepository
 from src.data.repositories.user_repository import UserRepository
 from src.schemas.team_schema import (
     AddMemberRequest,
-    MemberCreateRequest,
     TeamCreateRequest,
-
 )
 from src.schemas.auth import SignupRequest
 logger = logging.getLogger(__name__)
@@ -40,25 +38,18 @@ class TeamService:
     async def create_team(self, payload: TeamCreateRequest) -> tuple[Team, list[User]]:
         """
         1. Validate team name is unique.
-        2. Find the team_lead member — create them first, get their user.id.
-        3. Create Team row with lead_id = new lead's user.id.
-        4. Create remaining members with lead_id = lead's user.id.
+        2. Validate lead_id exists.
+        3. Create Team row with lead_id.
+        4. Update lead_id on members.
         """
         if await self._team_repo.get_by_name(payload.name):
             raise ConflictError(f"Team '{payload.name}' already exists.")
 
-        # Split lead from regular members (schema guarantees exactly one lead)
-        lead_payload = next(m for m in payload.members if m.role.value == "team_lead")
-        other_members = [m for m in payload.members if m.role.value != "team_lead"]
+        lead_user = await self._user_repo.get_by_id(payload.lead_id)
+        if not lead_user:
+            raise NotFoundError(f"Lead user {payload.lead_id} not found.")
 
-        # Create lead user first — no lead_id on themselves (they ARE the lead)
-        lead_user = await self._create_and_invite_member(
-            lead_id=None,
-            team_name=payload.name,
-            payload=lead_payload,
-        )
-
-        # Create team row now that we have the lead's id
+        # Create team row
         team = Team(
             name=payload.name,
             description=payload.description,
@@ -67,15 +58,16 @@ class TeamService:
         team = await self._team_repo.save(team)
         logger.info("team_created: id=%s name=%r lead=%s", team.id, team.name, lead_user.id)
 
-        # Create remaining members with lead_id pointing to the new lead
+        # Update members
         members: list[User] = [lead_user]
-        for member_payload in other_members:
-            user = await self._create_and_invite_member(
-                lead_id=lead_user.id,
-                team_name=team.name,
-                payload=member_payload,
-            )
-            members.append(user)
+        for member_id in payload.member_ids:
+            if member_id == lead_user.id:
+                continue
+            user = await self._user_repo.get_by_id(member_id)
+            if user:
+                user.lead_id = str(lead_user.id)
+                await self._user_repo.save(user)
+                members.append(user)
 
         await self._session.commit()
         return team, members
@@ -124,15 +116,12 @@ class TeamService:
         if not team.lead_id:
             raise ConflictError(f"Team {team_id} has no lead assigned.")
 
-        user = await self._create_and_invite_member(
-            lead_id=UUID(str(team.lead_id)),
-            team_name=team.name,
-            payload=MemberCreateRequest(
-                email=payload.email,
-                full_name=payload.full_name,
-                role=payload.role,
-            ),
-        )
+        user = await self._user_repo.get_by_id(payload.user_id)
+        if not user:
+            raise NotFoundError(f"User {payload.user_id} not found.")
+
+        user.lead_id = str(team.lead_id)
+        await self._user_repo.save(user)
         await self._session.commit()
         return user
 
@@ -153,63 +142,12 @@ class TeamService:
         await self._session.commit()
         logger.info("member_removed: user=%s team=%s", user_id, team_id)
 
+
+def generate_temp_password(length: int = 12) -> str:
+    """Generate a random temporary password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
     # ------------------------------------------------------------------ #
     # Internal                                                             #
     # ------------------------------------------------------------------ #
-
-    async def _create_and_invite_member(
-    self,
-    lead_id: UUID | None,
-    team_name: str,
-    payload: MemberCreateRequest,
-) -> User:
-
-        temp_password = _generate_temp_password()
-
-        try:
-            signup_data = SignupRequest(
-                email=payload.email,
-                full_name=payload.full_name,
-                password=temp_password,
-                role=payload.role.value,
-            )
-
-            user_response = await self._auth_svc.signup(signup_data)
-
-            user = await self._user_repo.get_by_id(user_response.id)
-
-            if lead_id:
-                user.lead_id = str(lead_id)
-                await self._user_repo.save(user)
-
-        except AuthenticationError:
-            raise ConflictError(f"Email '{payload.email}' is already registered.")
-
-        settings = get_settings()
-
-        try:
-            email_service.send_team_invite(
-                to=payload.email,
-                full_name=payload.full_name,
-                role=payload.role.value,
-                team_name=team_name,
-                temporary_password=temp_password,
-                login_url=settings.FRONTEND_URL + "/login",
-            )
-        except Exception:
-            logger.exception("invite_email_failed")
-
-        return user
-
-
-def _generate_temp_password(length: int = 12) -> str:
-        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-        while True:
-            pwd = "".join(secrets.choice(alphabet) for _ in range(length))
-            if (
-                any(c.isupper() for c in pwd)
-                and any(c.islower() for c in pwd)
-                and any(c.isdigit() for c in pwd)
-                and any(c in "!@#$%^&*" for c in pwd)
-            ):
-                return pwd

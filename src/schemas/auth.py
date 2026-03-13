@@ -11,6 +11,7 @@ class SignupRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    full_name: str | None = Field(default=None, max_length=255)
     role: UserRole = Field(default=UserRole.USER, description="User role")
 
     model_config = ConfigDict(
@@ -75,6 +76,7 @@ class UserResponse(BaseModel):
 
     id: uuid.UUID
     email: str
+    full_name: str | None = None
     role: str
     is_active: bool
     is_verified: bool
@@ -135,3 +137,15 @@ class UserUpdateRequest(BaseModel):
     is_active: bool | None = None
     customer_tier_id: int | None = None
     preferred_mode_of_contact: ContactMode | None = None
+
+
+class UserCreateRequest(BaseModel):
+    """Payload for creating a user independently."""
+    email: EmailStr
+    full_name: str = Field(..., min_length=1, max_length=255)
+    role: UserRole
+
+class UserCreateResponse(BaseModel):
+    """Response returning the created user and their temporary password."""
+    user: UserResponse
+    temporary_password: str

@@ -29,30 +29,17 @@ class MemberResponse(BaseModel):
 
 class TeamCreateRequest(BaseModel):
     """
-    Create a team from a members list.
-    lead_id is NOT required from the client — the backend derives it
-    from whichever member has role=team_lead.
-    Exactly one member must have role=team_lead.
+    Create a team from existing member IDs.
+    lead_id is required. member_ids are required.
     """
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
-    members: list[MemberCreateRequest] = Field(..., min_length=1)
-
-    @model_validator(mode="after")
-    def validate_exactly_one_lead(self) -> "TeamCreateRequest":
-        leads = [m for m in self.members if m.role == UserRole.TEAM_LEAD]
-        if len(leads) == 0:
-            raise ValueError("At least one member must have role 'team_lead'.")
-        if len(leads) > 1:
-            raise ValueError("Only one member can have role 'team_lead'.")
-        return self
-
+    lead_id: UUID
+    member_ids: list[UUID] = []
 
 class AddMemberRequest(BaseModel):
-    """Create a new user and assign them to this team."""
-    email: EmailStr
-    full_name: str = Field(..., min_length=1, max_length=255)
-    role: UserRole
+    """Assign an existing user to this team."""
+    user_id: UUID
 
 
 class TeamResponse(BaseModel):

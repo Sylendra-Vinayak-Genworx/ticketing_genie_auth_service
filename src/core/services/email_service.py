@@ -85,6 +85,34 @@ class EmailService:
         )
         self.send(to=to, subject=subject, html=html, text=text)
 
+    def send_user_invite(
+        self,
+        *,
+        to: str,
+        full_name: str,
+        role: str,
+        temporary_password: str,
+        login_url: str,
+    ) -> None:
+        """
+        Send a welcome email with the user's credentials, without a team context.
+        """
+        subject = "Welcome to Ticketing Genie"
+        html = _user_invite_html(
+            full_name=full_name,
+            role=role,
+            email=to,
+            temporary_password=temporary_password,
+            login_url=login_url,
+        )
+        text = _user_invite_text(
+            full_name=full_name,
+            role=role,
+            email=to,
+            temporary_password=temporary_password,
+            login_url=login_url,
+        )
+        self.send(to=to, subject=subject, html=html, text=text)
 
 # ------------------------------------------------------------------ #
 # Email templates                                                      #
@@ -162,6 +190,77 @@ Your login credentials:
   Temporary Password: {temporary_password}
   Role:               {role.capitalize()}
   Team:               {team_name}
+
+Log in here: {login_url}
+
+Please change your password after your first login.
+If you weren't expecting this email, you can safely ignore it.
+"""
+
+def _user_invite_html(
+    *,
+    full_name: str,
+    role: str,
+    email: str,
+    temporary_password: str,
+    login_url: str,
+) -> str:
+    return f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 24px;">
+  <h2 style="color: #4F46E5;">Welcome to Ticketing Genie</h2>
+  <p>Hi {full_name},</p>
+  <p>An admin has created an account for you. Here are your login credentials:</p>
+
+  <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <tr>
+      <td style="padding: 8px; background: #F3F4F6; font-weight: bold; width: 40%;">Email</td>
+      <td style="padding: 8px; background: #F9FAFB;">{email}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; background: #F3F4F6; font-weight: bold;">Temporary Password</td>
+      <td style="padding: 8px; background: #F9FAFB; font-family: monospace; letter-spacing: 2px;">{temporary_password}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; background: #F3F4F6; font-weight: bold;">Role</td>
+      <td style="padding: 8px; background: #F9FAFB;">{role.capitalize()}</td>
+    </tr>
+  </table>
+
+  <p>
+    <a href="{login_url}"
+       style="display: inline-block; background: #4F46E5; color: white;
+              padding: 12px 24px; border-radius: 6px; text-decoration: none;
+              font-weight: bold;">
+      Log In Now
+    </a>
+  </p>
+
+  <p style="color: #6B7280; font-size: 13px;">
+    For security, please change your password after your first login.<br>
+    If you weren't expecting this email, you can safely ignore it.
+  </p>
+</body>
+</html>
+"""
+
+def _user_invite_text(
+    *,
+    full_name: str,
+    role: str,
+    email: str,
+    temporary_password: str,
+    login_url: str,
+) -> str:
+    return f"""Hi {full_name},
+
+Welcome to Ticketing Genie!
+
+Your login credentials:
+  Email:              {email}
+  Temporary Password: {temporary_password}
+  Role:               {role.capitalize()}
 
 Log in here: {login_url}
 
