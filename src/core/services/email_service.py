@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     def __init__(self) -> None:
+        """
+        init  .
+        """
         settings = get_settings()
         self._host = settings.SMTP_HOST
         self._port = settings.SMTP_PORT
@@ -23,7 +26,9 @@ class EmailService:
     # Core send                                                            #
     # ------------------------------------------------------------------ #
 
-    def send(self, *, to: str, subject: str, html: str, text: str | None = None) -> None:
+    def send(
+        self, *, to: str, subject: str, html: str, text: str | None = None
+    ) -> None:
         """
         Send an email via Gmail SMTP (TLS on port 587).
         Raises on any SMTP error so the caller can handle/retry.
@@ -114,9 +119,32 @@ class EmailService:
         )
         self.send(to=to, subject=subject, html=html, text=text)
 
+    def send_password_reset(
+        self,
+        *,
+        to: str,
+        full_name: str,
+        reset_url: str,
+    ) -> None:
+        """
+        Send a password-reset email with a link to reset.
+        """
+        subject = "Reset Your Password — Ticketing Genie"
+        html = _password_reset_html(
+            full_name=full_name,
+            reset_url=reset_url,
+        )
+        text = _password_reset_text(
+            full_name=full_name,
+            reset_url=reset_url,
+        )
+        self.send(to=to, subject=subject, html=html, text=text)
+
+
 # ------------------------------------------------------------------ #
 # Email templates                                                      #
 # ------------------------------------------------------------------ #
+
 
 def _invite_html(
     *,
@@ -197,6 +225,7 @@ Please change your password after your first login.
 If you weren't expecting this email, you can safely ignore it.
 """
 
+
 def _user_invite_html(
     *,
     full_name: str,
@@ -245,6 +274,7 @@ def _user_invite_html(
 </html>
 """
 
+
 def _user_invite_text(
     *,
     full_name: str,
@@ -266,6 +296,60 @@ Log in here: {login_url}
 
 Please change your password after your first login.
 If you weren't expecting this email, you can safely ignore it.
+"""
+
+
+# ------------------------------------------------------------------ #
+# Password reset email templates                                       #
+# ------------------------------------------------------------------ #
+
+
+def _password_reset_html(
+    *,
+    full_name: str,
+    reset_url: str,
+) -> str:
+    display_name = full_name or "there"
+    return f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 24px;">
+  <h2 style="color: #4F46E5;">Reset Your Password</h2>
+  <p>Hi {display_name},</p>
+  <p>We received a request to reset your password. Click the button below to set a new one:</p>
+
+  <p>
+    <a href="{reset_url}"
+       style="display: inline-block; background: #4F46E5; color: white;
+              padding: 12px 24px; border-radius: 6px; text-decoration: none;
+              font-weight: bold;">
+      Reset Password
+    </a>
+  </p>
+
+  <p style="color: #6B7280; font-size: 13px;">
+    This link expires in 1 hour.<br>
+    If you didn't request a password reset, you can safely ignore this email.
+  </p>
+</body>
+</html>
+"""
+
+
+def _password_reset_text(
+    *,
+    full_name: str,
+    reset_url: str,
+) -> str:
+    display_name = full_name or "there"
+    return f"""Hi {display_name},
+
+We received a request to reset your password.
+
+Reset your password here: {reset_url}
+
+This link expires in 1 hour.
+If you didn't request a password reset, you can safely ignore this email.
 """
 
 

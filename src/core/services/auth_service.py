@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config.settings import get_settings
 from src.core.exceptions.auth import (
     AuthenticationError,
+    ConflictError,
     InvalidTokenTypeError,
     TokenExpiredError,
     TokenRevokedError,
@@ -37,19 +38,36 @@ _DUMMY_HASH = pwd.hash("dummy_password")
 
 class AuthService:
     def __init__(self, session: AsyncSession) -> None:
+        """
+          init  .
+
+        Args:
+            session (AsyncSession): Input parameter.
+        """
         self._session = session
         self._user_repo = UserRepository(session)
         self._token_repo = TokenRepository(session)
 
     # ── SIGNUP ──────────────────────────────────────────────────────────────
     async def signup(self, data: SignupRequest) -> UserResponse:
+        """
+        Signup.
+
+        Args:
+            data (SignupRequest): Input parameter.
+
+        Returns:
+            UserResponse: The expected output.
+        """
         if await self._user_repo.email_exists(data.email):
             logger.warning("signup_duplicate_email", email=data.email)
-            raise AuthenticationError("Unable to create account")
+            # FIX: was AuthenticationError("Unable to create account") which
+            # returned 401, causing the frontend axios interceptor to treat it
+            # as an expired token and attempt a pointless refresh cycle.
+            # A duplicate email is a conflict (409), not an auth failure (401).
+            raise ConflictError("An account with this email already exists")
 
-        result = await self._session.execute(
-            select(Role).where(Role.name == data.role)
-        )
+        result = await self._session.execute(select(Role).where(Role.name == data.role))
         role_record = result.scalar_one_or_none()
         if role_record is None:
             role_record = Role(name=data.role)
@@ -68,6 +86,15 @@ class AuthService:
 
     # ── LOGIN ────────────────────────────────────────────────────────────────
     async def login(self, data: LoginRequest) -> TokenResponse:
+        """
+        Login.
+
+        Args:
+            data (LoginRequest): Input parameter.
+
+        Returns:
+            TokenResponse: The expected output.
+        """
         user = await self._user_repo.get_by_email(data.email.lower().strip())
 
         password_valid = verify_password(
@@ -86,6 +113,15 @@ class AuthService:
     # ── REFRESH ──────────────────────────────────────────────────────────────
     async def refresh(self, refresh_token: str) -> TokenResponse:
         # 1. Decode
+        """
+        Refresh.
+
+        Args:
+            refresh_token (str): Input parameter.
+
+        Returns:
+            TokenResponse: The expected output.
+        """
         try:
             payload = decode_token(refresh_token)
         except ExpiredSignatureError:
@@ -128,6 +164,12 @@ class AuthService:
         return tokens
 
     async def logout(self, refresh_token: str) -> None:
+        """
+        Logout.
+
+        Args:
+            refresh_token (str): Input parameter.
+        """
         try:
             payload = decode_token(refresh_token)
         except Exception:
@@ -145,7 +187,11 @@ class AuthService:
     # ── INTERNAL ─────────────────────────────────────────────────────────────
     async def _issue_token_pair(self, user: User) -> TokenResponse:
         jti = str(uuid.uuid4())
-        role_name = user.role.name.value if hasattr(user.role.name, "value") else str(user.role.name)
+        role_name = (
+            user.role.name.value
+            if hasattr(user.role.name, "value")
+            else str(user.role.name)
+        )
 
         access_token = create_access_token(
             subject=str(user.id),
@@ -158,7 +204,9 @@ class AuthService:
         )
 
         # Persist refresh token
-        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
+        expires_at = datetime.now(UTC) + timedelta(
+            days=settings.refresh_token_expire_days
+        )
         refresh_record = RefreshToken(
             user_id=user.id,
             jti=jti,
@@ -173,13 +221,13 @@ class AuthService:
             refresh_token=refresh_token_str,
             expires_in=settings.access_token_expire_minutes * 60,
         )
-    
+
     async def get_agents_by_lead(self, lead_id: str) -> list[UserResponse]:
         """Get all agents associated with a specific lead."""
         agents = await self._user_repo.get_agents_by_lead(lead_id)
         return [UserResponse.model_validate(agent) for agent in agents]
-    
-    async def get_all_users(self)->list[UserResponse]:
+
+    async def get_all_users(self) -> list[UserResponse]:
         """Get all the users."""
-        users= await self._user_repo.get_all_user()
+        users = await self._user_repo.get_all_user()
         return users

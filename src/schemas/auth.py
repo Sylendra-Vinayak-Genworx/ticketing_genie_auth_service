@@ -19,7 +19,7 @@ class SignupRequest(BaseModel):
             "example": {
                 "email": "user@example.com",
                 "password": "SecurePass123!",
-                "role": "user"
+                "role": "user",
             }
         }
     )
@@ -33,10 +33,7 @@ class LoginRequest(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "email": "user@example.com",
-                "password": "SecurePass123!"
-            }
+            "example": {"email": "user@example.com", "password": "SecurePass123!"}
         }
     )
 
@@ -46,12 +43,9 @@ class RefreshRequest(BaseModel):
 
     refresh_token: str
 
-
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-            }
+            "example": {"refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
         }
     )
 
@@ -82,9 +76,13 @@ class UserResponse(BaseModel):
     is_verified: bool
     created_at: datetime
     lead_id: uuid.UUID | None = None
-    team_id: uuid.UUID | None = None          # optional — no column on User, only a relationship
+    team_id: uuid.UUID | None = (
+        None  # optional — no column on User, only a relationship
+    )
     preferred_mode_of_contact: str = "email"  # ContactMode.EMAIL default
-    customer_tier_id: int | None = Field(default=None, validation_alias="customer_tierid")
+    customer_tier_id: int | None = Field(
+        default=None, validation_alias="customer_tierid"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -118,6 +116,7 @@ class SignupResponse(BaseModel):
     user: UserResponse
     message: str = "Account created successfully"
 
+
 class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -141,11 +140,27 @@ class UserUpdateRequest(BaseModel):
 
 class UserCreateRequest(BaseModel):
     """Payload for creating a user independently."""
+
     email: EmailStr
     full_name: str = Field(..., min_length=1, max_length=255)
     role: UserRole
 
+
 class UserCreateResponse(BaseModel):
     """Response returning the created user and their temporary password."""
+
     user: UserResponse
     temporary_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request body for forgot-password."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for password reset."""
+
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)

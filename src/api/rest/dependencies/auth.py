@@ -76,11 +76,19 @@ async def get_current_active_user(
 
 
 def role_required(required_role: str) -> Callable[..., Any]:
+    """
+    Role required.
+
+    Args:
+        required_role (str): Input parameter.
+
+    Returns:
+        Callable[..., Any]: The expected output.
+    """
 
     async def _check(
         user: Annotated[User, Depends(get_current_active_user)],
     ) -> User:
-
         if not user.role or user.role.name.value != required_role:
             raise AuthorizationError(f"Role '{required_role}' required")
 

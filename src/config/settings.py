@@ -5,16 +5,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="allow",
-
     )
 
-    DATABASE_URL:str="DATABASE_URL=postgresql+asyncpg://postgres:raja807@localhost:5433/ticketing_genie"
+    DATABASE_URL: str = "DATABASE_URL=postgresql+asyncpg://postgres:raja807@localhost:5433/ticketing_genie"
     SMTP_HOST: str
     SMTP_PORT: int = 587
     SMTP_USER: str
@@ -25,10 +23,13 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
-    cookie_secure: bool = False      
-    cookie_samesite: str = "lax"
+    # FIX: must be True + "none" for cross-origin cookie delivery over HTTPS.
+    # SameSite=lax blocks cookies on cross-origin POST (the refresh call),
+    # and secure=False causes browsers to reject SameSite=none cookies entirely.
+    cookie_secure: bool = True
+    cookie_samesite: str = "none"
     environment: str = "development"
-    FRONTEND_URL:str="http://localhost:5173"
+    FRONTEND_URL: str = "http://localhost:5173"
     login_rate_limit: str = "5/minute"
 
     @field_validator("secret_key")

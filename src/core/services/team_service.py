@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -8,10 +7,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.settings import get_settings
-from src.core.exceptions.auth import AuthenticationError, ConflictError, NotFoundError
+from src.core.exceptions.auth import ConflictError, NotFoundError
 from src.core.services.auth_service import AuthService
-from src.core.services.email_service import email_service
 from src.data.models.postgres.team import Team
 from src.data.models.postgres.user import User
 from src.data.repositories.team_repository import TeamRepository
@@ -20,12 +17,18 @@ from src.schemas.team_schema import (
     AddMemberRequest,
     TeamCreateRequest,
 )
-from src.schemas.auth import SignupRequest
+
 logger = logging.getLogger(__name__)
 
 
 class TeamService:
     def __init__(self, session: AsyncSession) -> None:
+        """
+          init  .
+
+        Args:
+            session (AsyncSession): Input parameter.
+        """
         self._session = session
         self._team_repo = TeamRepository(session)
         self._user_repo = UserRepository(session)
@@ -56,7 +59,9 @@ class TeamService:
             lead_id=str(lead_user.id),
         )
         team = await self._team_repo.save(team)
-        logger.info("team_created: id=%s name=%r lead=%s", team.id, team.name, lead_user.id)
+        logger.info(
+            "team_created: id=%s name=%r lead=%s", team.id, team.name, lead_user.id
+        )
 
         # Update members
         members: list[User] = [lead_user]
@@ -73,6 +78,15 @@ class TeamService:
         return team, members
 
     async def get_team(self, team_id: UUID) -> tuple[Team, list[User]]:
+        """
+        Get team.
+
+        Args:
+            team_id (UUID): Input parameter.
+
+        Returns:
+            tuple[Team, list[User]]: The expected output.
+        """
         team = await self._team_repo.get_by_id(team_id)
         if not team:
             raise NotFoundError(f"Team {team_id} not found.")
@@ -80,17 +94,30 @@ class TeamService:
         return team, members
 
     async def list_teams(self) -> tuple[int, list[tuple[Team, list[User]]]]:
+        """
+        List teams.
+
+        Returns:
+            tuple[int, list[tuple[Team, list[User]]]]: The expected output.
+        """
         total, teams = await self._team_repo.list_all()
         result = []
         for team in teams:
             members = (
                 await self._user_repo.get_agents_by_lead(str(team.lead_id))
-                if team.lead_id else []
+                if team.lead_id
+                else []
             )
             result.append((team, members))
         return total, result
 
     async def delete_team(self, team_id: UUID) -> None:
+        """
+        Delete team.
+
+        Args:
+            team_id (UUID): Input parameter.
+        """
         team = await self._team_repo.get_by_id(team_id)
         if not team:
             raise NotFoundError(f"Team {team_id} not found.")
@@ -110,6 +137,16 @@ class TeamService:
     # ------------------------------------------------------------------ #
 
     async def add_member(self, team_id: UUID, payload: AddMemberRequest) -> User:
+        """
+        Add member.
+
+        Args:
+            team_id (UUID): Input parameter.
+            payload (AddMemberRequest): Input parameter.
+
+        Returns:
+            User: The expected output.
+        """
         team = await self._team_repo.get_by_id(team_id)
         if not team:
             raise NotFoundError(f"Team {team_id} not found.")
@@ -126,6 +163,13 @@ class TeamService:
         return user
 
     async def remove_member(self, team_id: UUID, user_id: UUID) -> None:
+        """
+        Remove member.
+
+        Args:
+            team_id (UUID): Input parameter.
+            user_id (UUID): Input parameter.
+        """
         team = await self._team_repo.get_by_id(team_id)
         if not team:
             raise NotFoundError(f"Team {team_id} not found.")
